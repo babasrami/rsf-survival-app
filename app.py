@@ -1096,10 +1096,15 @@ else:
 
     max_time = 3650  # Default max time
     
-    # Plot each patient with a different color
-    for i in range(len(X)):
+    # Generate unique colors for all patients using colormap (no limit)
+    import matplotlib.cm as cm
+    num_patients = len(X)
+    colormap = cm.get_cmap('gist_rainbow', num_patients)  # Use rainbow for max variety
+    
+    # Plot each patient with a unique color
+    for i in range(num_patients):
         sf = surv_funcs[i]
-        color = PATIENT_COLORS[i % len(PATIENT_COLORS)]
+        color = colormap(i / max(num_patients - 1, 1))  # Get unique color from colormap
         
         # Get patient label
         if id_col:
