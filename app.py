@@ -15,6 +15,29 @@ except Exception:
 st.set_page_config(page_title="RSF Survival Predictor", layout="wide")
 
 # ---------------------------
+# Expected proteins list (shown in sidebar)
+# ---------------------------
+EXPECTED_PROTEINS = [
+    "ADAM15",
+    "ADAMTS8",
+    "MMP7",
+    "MMP15",
+    "ADAMTSL1",
+    "MMP13",
+    "MMP1",
+    "MMP12",
+    "MMP23",
+    "MMP26",
+    "ADAMTS7",
+    "MMP28",
+    "MMP9",
+    "MMP25",
+]
+
+# Fixed suffix behavior (no UI)
+DEFAULT_PROTEIN_SUFFIXES = ("_pTPM",)
+
+# ---------------------------
 # Modern UI styling (no external deps)
 # ---------------------------
 st.markdown(
@@ -48,25 +71,40 @@ div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] {
   overflow: hidden;
 }
 
-/* Sidebar */
+/* Sidebar (dark) */
 section[data-testid="stSidebar"] {
-  border-right: 1px solid rgba(2, 6, 23, 0.10);
-  background: linear-gradient(180deg, rgba(255,255,255,0.74), rgba(255,255,255,0.55));
-  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255,255,255,0.10);
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.94), rgba(2, 6, 23, 0.82));
+  color: rgba(255,255,255,0.92) !important;
+}
+section[data-testid="stSidebar"] * {
+  color: rgba(255,255,255,0.92) !important;
+}
+section[data-testid="stSidebar"] .stSlider > div,
+section[data-testid="stSidebar"] .stRadio > div,
+section[data-testid="stSidebar"] .stSelectbox > div,
+section[data-testid="stSidebar"] .stTextInput > div {
+  background: rgba(255,255,255,0.06) !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+}
+section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+  background: rgba(255,255,255,0.06) !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+}
+section[data-testid="stSidebar"] code {
+  background: rgba(255,255,255,0.08) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
 }
 
 /* Headings */
-h1, h2, h3 {
-  letter-spacing: -0.02em;
-}
+h1, h2, h3 { letter-spacing: -0.02em; }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-# ---------------------------
-# Helpers
-# ---------------------------
 ROMAN_MAP = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
 
 def parse_stage_ordinal(stage_val) -> float:
@@ -151,9 +189,18 @@ def compute_time_event(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def _detect_protein_cols(df: pd.DataFrame, suffixes: tuple[str, ...]) -> list[str]:
+    """
+    Detect protein columns by either:
+    - exact match of EXPECTED_PROTEINS (e.g., 'MMP9', 'ADAM15')
+    - suffix match (default: '_pTPM')
+    """
     cols = []
+    exp_set = set(EXPECTED_PROTEINS)
     for c in df.columns:
         cs = str(c)
+        if cs in exp_set:
+            cols.append(cs)
+            continue
         if any(cs.endswith(sfx) for sfx in suffixes):
             cols.append(cs)
     return cols
@@ -179,23 +226,27 @@ def preprocess_for_model(df: pd.DataFrame, bundle: dict, input_is_raw_ptpm: bool
     scaler = extract_scaler(bundle)
     scaler_cols = extract_scaler_cols(bundle, protein_cols)
 
-    if input_is_raw_ptpm and protein_cols:
-        for col in protein_cols:
-            df[col] = np.log1p(pd.to_numeric(df[col], errors="coerce").fillna(0.0))
+    # Only apply log1p + scaling to suffix-based columns by default.
+    # (Keeps prior behavior safe; exact-name proteins may already be in correct scale depending on your pipeline.)
+    if input_is_raw_ptpm:
+        suffix_based_cols = [c for c in protein_cols if any(str(c).endswith(sfx) for sfx in protein_suffixes)]
+        if suffix_based_cols:
+            for col in suffix_based_cols:
+                df[col] = np.log1p(pd.to_numeric(df[col], errors="coerce").fillna(0.0))
 
-        if scaler is not None:
-            try:
-                use_cols = [c for c in scaler_cols if c in df.columns]
-                if use_cols:
-                    df.loc[:, use_cols] = scaler.transform(df[use_cols].astype(float).values)
-            except Exception as e:
-                st.warning(f"Scaler found in bundle, but transform failed: {e}. Proceeding without scaling.")
-        else:
-            st.warning(
-                "This model bundle does not include a saved scaler. "
-                "If your model was trained on log1p + z-scored proteins, results may differ unless you re-save "
-                "the bundle with the fitted scaler or upload already-normalized inputs."
-            )
+            if scaler is not None:
+                try:
+                    use_cols = [c for c in scaler_cols if c in df.columns]
+                    if use_cols:
+                        df.loc[:, use_cols] = scaler.transform(df[use_cols].astype(float).values)
+                except Exception as e:
+                    st.warning(f"Scaler found in bundle, but transform failed: {e}. Proceeding without scaling.")
+            else:
+                st.warning(
+                    "This model bundle does not include a saved scaler. "
+                    "If your model was trained on log1p + z-scored proteins, results may differ unless you re-save "
+                    "the bundle with the fitted scaler or upload already-normalized inputs."
+                )
 
     missing_cols = [c for c in features if c not in df.columns]
     if missing_cols:
@@ -258,9 +309,6 @@ def _parse_years_text(text: str) -> list[float]:
 def _df_to_csv_bytes(df: pd.DataFrame) -> bytes:
     return df.to_csv(index=False).encode("utf-8")
 
-# ---------------------------
-# UI
-# ---------------------------
 st.title("Random Survival Forest (RSF) — Survival Prediction Interface")
 st.caption("Upload your model bundle (.joblib) and a patient table (.xlsx/.csv). Edit values, run inference, and export outputs.")
 
@@ -300,24 +348,24 @@ model = bundle["model"]
 features = extract_features(bundle)
 risk_ref = bundle.get("risk_ref", {}) or {}
 
-# Sidebar controls
 st.sidebar.header("Inference options")
-input_is_raw = st.sidebar.toggle("Inputs are raw pTPM (apply log1p + scaling if available)", value=True)
 
-st.sidebar.subheader("Protein column detection")
-protein_suffixes = st.sidebar.multiselect(
-    "Column suffixes to treat as protein expression",
-    options=["_pTPM", "_PTPM", "_tpm", "_TPM", "_expr", "_expression"],
-    default=["_pTPM"],
-    help="Defaults to _pTPM. Add more suffixes only if your uploaded table uses them.",
-)
-protein_suffixes = tuple(protein_suffixes) if protein_suffixes else ("_pTPM",)
+input_is_raw = st.sidebar.toggle("Inputs are raw pTPM (apply log1p + scaling if available)", value=True)
 
 st.sidebar.divider()
 st.sidebar.subheader("Report survival probability at years")
+
 preset_years = [0.5, 1, 2, 3, 4, 5, 7, 10, 12, 15, 20]
-timepoints_years = st.sidebar.multiselect("Presets", options=preset_years, default=[1, 2, 3, 5, 10])
-custom_years_text = st.sidebar.text_input("Custom years (comma/space separated)", value="", placeholder="e.g. 0.25, 6, 8, 13")
+timepoints_years = st.sidebar.multiselect(
+    "Presets",
+    options=preset_years,
+    default=[1, 2, 3, 5, 10],
+)
+custom_years_text = st.sidebar.text_input(
+    "Custom years (comma/space separated)",
+    value="",
+    placeholder="e.g. 0.25, 6, 8, 13",
+)
 custom_years = _parse_years_text(custom_years_text)
 all_years = sorted(set(timepoints_years + custom_years))
 timepoints_days = [y * 365.25 for y in all_years]
@@ -329,14 +377,13 @@ plot_mode = st.sidebar.radio(
     "Survival curve view",
     options=(["Interactive (zoom)", "Static (matplotlib)"] if _PLOTLY_OK else ["Static (matplotlib)"]),
     index=0,
+    help="Interactive mode supports zoom/pan if Plotly is available.",
 )
 plot_height = st.sidebar.slider("Plot height (px)", 320, 900, 520, 20)
 
 st.sidebar.divider()
-st.sidebar.subheader("Bundle summary")
-st.sidebar.write(f"Features expected: {len(features)}")
-if features:
-    st.sidebar.code("\n".join(features[:25]) + ("\n..." if len(features) > 25 else ""))
+st.sidebar.subheader("Features expected (proteins)")
+st.sidebar.code("\n".join(EXPECTED_PROTEINS))
 
 if not data_file:
     st.info("Upload a patient data file to proceed.")
@@ -352,7 +399,6 @@ except Exception as e:
 id_candidates = [c for c in ["Sample", "Patient_ID", "patient_id", "id"] if c in df_in.columns]
 id_col = id_candidates[0] if id_candidates else None
 
-# Editable table + edit helpers
 st.subheader("Input data")
 st.caption("Edit values directly, then run predictions. Use NA/blank for missing values.")
 
@@ -440,7 +486,6 @@ if apply_bulk:
             df_tmp.loc[mask, col] = v if not np.isnan(v) else raw
         st.session_state.df_edit = df_tmp
 
-# Column config (nicer numeric editing)
 col_cfg = {}
 for c in st.session_state.df_edit.columns:
     if c in ("time", "days"):
@@ -461,7 +506,6 @@ df_edit = st.data_editor(
 )
 st.session_state.df_edit = df_edit
 
-# Run predictions
 st.subheader("Run predictions")
 if id_col:
     st.caption(f"Patient identifier column detected: `{id_col}`")
@@ -469,11 +513,17 @@ else:
     st.caption("No patient identifier column detected. Predictions will be displayed by row index.")
 
 run_btn = st.button("Predict survival", type="primary", use_container_width=True)
+
 if not run_btn:
     st.stop()
 
 try:
-    X = preprocess_for_model(df_edit, bundle=bundle, input_is_raw_ptpm=input_is_raw, protein_suffixes=protein_suffixes)
+    X = preprocess_for_model(
+        df_edit,
+        bundle=bundle,
+        input_is_raw_ptpm=input_is_raw,
+        protein_suffixes=DEFAULT_PROTEIN_SUFFIXES,
+    )
 except Exception as e:
     st.error(f"Preprocessing failed: {e}")
     st.stop()
@@ -521,7 +571,6 @@ with dcol2:
         use_container_width=True,
     )
 
-# Plot per-patient survival curve (zoomable if Plotly available)
 st.subheader("Survival curve")
 sel_options = list(range(len(X)))
 if id_col:
