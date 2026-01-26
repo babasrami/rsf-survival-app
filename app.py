@@ -6,53 +6,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-import hashlib
 
 st.set_page_config(page_title="RSF Survival Predictor", layout="wide")
 
-st.markdown(
-    """
-<style>
-/* Dark sidebar */
-[data-testid="stSidebar"]{
-  background: radial-gradient(1200px 600px at 30% 10%, rgba(90,92,255,0.25), rgba(0,0,0,0)) ,
-              linear-gradient(180deg, #0b1220 0%, #070b12 100%);
-}
-[data-testid="stSidebar"] * { color: #e8eefc; }
-
-/* 3D-ish cards */
-.card {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 16px;
-  padding: 14px 16px;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
-  backdrop-filter: blur(10px);
-}
-
-/* Make main page background subtle */
-.stApp {
-  background: radial-gradient(1100px 700px at 15% 10%, rgba(88,101,242,0.18), rgba(0,0,0,0)),
-              radial-gradient(900px 600px at 85% 25%, rgba(16,185,129,0.14), rgba(0,0,0,0));
-}
-
-/* Tighter data editor */
-[data-testid="stDataFrame"]{
-  border-radius: 12px;
-  overflow: hidden;
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-# ---------------------------
-# Helpers
-# ---------------------------
-
-# Protein panel to expose in the UI (editable in the input table)
-PROTEIN_PANEL = [
+# -----------------------------
+# Fixed protein/ADAM features (UI display)
+# -----------------------------
+PROTEIN_FEATURES_DISPLAY = [
     "ADAM15",
     "ADAMTS8",
     "MMP7",
@@ -68,6 +28,44 @@ PROTEIN_PANEL = [
     "MMP9",
     "MMP25",
 ]
+
+# Session state keys
+if "_pred" not in st.session_state:
+    st.session_state["_pred"] = None  # stores computed predictions so plot settings update without re-click
+
+# -----------------------------
+# UI theme / styling
+# -----------------------------
+st.markdown(
+    """
+    <style>
+      /* Dark sidebar */
+      section[data-testid="stSidebar"] > div {
+        background: radial-gradient(900px 600px at 10% 10%, rgba(255,255,255,0.08), rgba(0,0,0,0.0)),
+                    linear-gradient(180deg, #0b1020 0%, #070a12 100%);
+        border-right: 1px solid rgba(255,255,255,0.08);
+      }
+      section[data-testid="stSidebar"] * {
+        color: rgba(255,255,255,0.92);
+      }
+      /* Cards */
+      .rsf-card {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+        backdrop-filter: blur(10px);
+      }
+      .rsf-muted { color: rgba(255,255,255,0.70); }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------------------
+# Helpers
+# ---------------------------
 ROMAN_MAP = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
 
 def parse_stage_ordinal(stage_val) -> float:
@@ -143,45 +141,6 @@ def read_table(uploaded) -> pd.DataFrame:
     if name.endswith(".xlsx") or name.endswith(".xls"):
         return pd.read_excel(uploaded)
     raise ValueError("Unsupported file type. Please upload .csv or .xlsx")
-
-def hash_dataframe(df: pd.DataFrame) -> str:
-    """Stable hash for detecting when the editable input changes."""
-    # Use CSV bytes for deterministic hashing
-    data = df.to_csv(index=False).encode("utf-8", errors="ignore")
-    return hashlib.md5(data).hexdigest()
-
-def ensure_ui_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Ensure the editable table exposes the expected clinical columns and protein panel."""
-    df = ensure_columns(df)
-    df = df.copy()
-
-    # Create a stable id column if missing
-    id_col = detect_id_column(df)
-    if id_col is None:
-        df.insert(0, "patient_id", [f"P{i+1}" for i in range(len(df))])
-        id_col = "patient_id"
-
-    clinical_cols = [
-        "age",
-        "stage",
-        "tumor_size",
-        "lymph_nodes",
-        "grade",
-        "er_status",
-        "pr_status",
-        "her2_status",
-    ]
-    required = [c for c in clinical_cols if c not in [id_col]] + PROTEIN_PANEL
-
-    for c in required:
-        if c not in df.columns:
-            df[c] = np.nan
-
-    # Reorder: id, clinical, proteins, then everything else
-    ordered = [id_col] + [c for c in clinical_cols if c in df.columns and c != id_col] + [p for p in PROTEIN_PANEL if p in df.columns]
-    rest = [c for c in df.columns if c not in ordered]
-    df = df[ordered + rest]
-    return df
 
 def compute_time_event(df: pd.DataFrame) -> pd.DataFrame:
     """Create 'time' and 'event' fields expected by the training notebook, if possible."""
@@ -341,253 +300,196 @@ risk_ref = bundle.get("risk_ref", {}) or {}
 
 st.sidebar.header("Inference options")
 input_is_raw = st.sidebar.toggle("Inputs are raw pTPM (apply log1p + scaling if available)", value=True)
-timepoints_years = st.sidebar.multiselect(
-    "Report survival probability at years:",
-    options=[1, 2, 3, 5, 7, 10, 15, 20, 25, 30],
-    default=[1, 2, 3, 5],
-)
+timepoints_years = st.sidebar.multiselect("Report survival probability at years:",
+                                         options=[1,2,3,5,10],
+                                         default=[1,2,3,5])
 timepoints_days = [y * 365.25 for y in timepoints_years]
 
 st.sidebar.divider()
 st.sidebar.subheader("Bundle summary")
-st.sidebar.write("Protein panel")
-st.sidebar.code("\n".join(PROTEIN_PANEL))
-
-with st.sidebar.expander("Model feature count", expanded=False):
-    st.write(f"Total features in uploaded model: {len(features)}")
+st.sidebar.write(f"Model features in bundle: {len(features)}")
+st.sidebar.subheader("Protein/ADAM features expected")
+st.sidebar.code("\n".join(PROTEIN_FEATURES_DISPLAY))
 
 if not data_file:
     st.info("Upload a patient data file to proceed.")
     st.stop()
 
 # Read data
-if "predicted" not in st.session_state:
-    st.session_state.predicted = False
-    st.session_state.last_pred_hash = None
-    st.session_state.pred_store = {}
-
 try:
-    file_bytes = data_file.getvalue()
-    file_sig = (data_file.name, len(file_bytes), hashlib.md5(file_bytes).hexdigest())
-except Exception:
-    file_sig = (getattr(data_file, "name", "uploaded"), None, None)
+    df_in = read_table(data_file)
+    df_in = ensure_columns(df_in)
+except Exception as e:
+    st.error(f"Could not read patient data: {e}")
+    st.stop()
 
-if st.session_state.get("data_sig") != file_sig:
-    try:
-        df_in = read_table(data_file)
-        df_in = ensure_ui_columns(df_in)
-    except Exception as e:
-        st.error(f"Could not read patient data: {e}")
-        st.stop()
-    st.session_state.data_sig = file_sig
-    st.session_state.df_edit = df_in
-    st.session_state.predicted = False
-    st.session_state.last_pred_hash = None
-    st.session_state.pred_store = {}
-
-df_current = st.session_state.df_edit.copy()
-id_col = detect_id_column(df_current)
+# Choose patient id column
+id_candidates = [c for c in ["Sample", "Patient_ID", "patient_id", "id"] if c in df_in.columns]
+id_col = id_candidates[0] if id_candidates else None
 
 left, right = st.columns([1, 1])
 
 with left:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Input data (editable)")
-    st.caption("Edit values directly. If you change the input data, click Predict again.")
-
-    df_edit = st.data_editor(
-        df_current,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="data_editor",
-    )
-
-    # Optional bulk edit tools (does not affect model logic; only edits the table)
-    with st.expander("Bulk edits", expanded=False):
-        c1, c2, c3 = st.columns([1, 1, 1])
-        with c1:
-            bulk_col = st.selectbox("Column", options=list(df_edit.columns), index=0, key="bulk_col")
-        with c2:
-            bulk_op = st.selectbox("Operation", options=["Set", "Add", "Multiply"], key="bulk_op")
-        with c3:
-            bulk_val = st.number_input("Value", value=0.0, step=0.1, key="bulk_val")
-
-        apply_bulk = st.button("Apply to all rows", use_container_width=True, key="bulk_apply")
-        if apply_bulk and bulk_col:
-            try:
-                s = pd.to_numeric(df_edit[bulk_col], errors="coerce")
-                if bulk_op == "Set":
-                    df_edit[bulk_col] = bulk_val
-                elif bulk_op == "Add":
-                    df_edit[bulk_col] = (s.fillna(0) + bulk_val)
-                else:
-                    df_edit[bulk_col] = (s.fillna(0) * bulk_val)
-            except Exception:
-                df_edit[bulk_col] = bulk_val
-
-            # Persist and refresh the editor view
-            st.session_state.df_edit = df_edit
-            st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.caption("You can edit values directly below; use NA/blank for missing values.")
+    df_edit = st.data_editor(df_in, num_rows="dynamic", use_container_width=True)
 
 with right:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Run predictions")
     if id_col:
         st.caption(f"Patient identifier column detected: `{id_col}`")
     else:
         st.caption("No patient identifier column detected. Predictions will be displayed by row index.")
 
-    edited_csv = df_edit.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "Download edited input (CSV)",
-        data=edited_csv,
-        file_name="edited_input.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
-
-    current_hash = hash_dataframe(df_edit)
-    if st.session_state.predicted and st.session_state.last_pred_hash != current_hash:
-        st.session_state.predicted = False
-        st.session_state.pred_store = {}
-        st.info("Input data changed. Click Predict to refresh results.")
-
     run_btn = st.button("Predict survival", type="primary", use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-st.session_state.df_edit = df_edit
-
-# Compute predictions only when requested. Plot settings update live after prediction.
+# Compute predictions only when the button is clicked. After that, keep results in
+# session_state so changing plot/table settings updates instantly.
 if run_btn:
     try:
         X = preprocess_for_model(df_edit, bundle=bundle, input_is_raw_ptpm=input_is_raw)
-        surv_funcs = model.predict_survival_function(X.values, return_array=False)
-        risk_scores = np.asarray(model.predict(X.values), dtype=float)
-
-        if id_col:
-            id_values = df_edit[id_col].astype(str).tolist()
-        else:
-            id_values = [str(i) for i in range(len(df_edit))]
-
-        st.session_state.pred_store = {
-            "surv_funcs": surv_funcs,
-            "risk_scores": risk_scores,
-            "id_values": id_values,
-            "id_col": id_col,
-        }
-        st.session_state.predicted = True
-        st.session_state.last_pred_hash = current_hash
     except Exception as e:
-        st.error(f"Prediction failed: {e}")
-        st.session_state.predicted = False
-        st.session_state.pred_store = {}
+        st.error(f"Preprocessing failed: {e}")
+        st.session_state["_pred"] = None
+    else:
+        try:
+            surv_funcs = model.predict_survival_function(X.values, return_array=False)
+            risk_scores = model.predict(X.values)
+        except Exception as e:
+            st.error(f"Model prediction failed: {e}")
+            st.session_state["_pred"] = None
+        else:
+            st.session_state["_pred"] = {
+                "X": X,
+                "surv_funcs": surv_funcs,
+                "risk_scores": risk_scores,
+                "id_col": id_col,
+                "df": df_edit.copy(),
+            }
 
-if not st.session_state.get("predicted"):
-    st.divider()
-    st.info("Click **Predict survival** to compute results. Plot settings update live after prediction.")
+pred = st.session_state.get("_pred")
+if pred is None:
+    st.info("Upload data, edit if needed, then click **Predict survival**.")
     st.stop()
 
-# Pull stored outputs (so plot controls do not reset the app)
-surv_funcs = st.session_state.pred_store["surv_funcs"]
-risk_scores = st.session_state.pred_store["risk_scores"]
-id_values = st.session_state.pred_store["id_values"]
+X = pred["X"]
+surv_funcs = pred["surv_funcs"]
+risk_scores = pred["risk_scores"]
+id_col = pred["id_col"]
+df_used = pred["df"]
 
-# Results table (timepoints can change live)
+# Results table (recomputed from stored survival functions so it updates with timepoint settings)
 rows = []
-for i in range(len(id_values)):
-    sf = surv_funcs[i]
-    probs = survival_prob_at_times(sf, timepoints_days) if timepoints_days else []
+for i in range(len(X)):
+    pid = df_used.iloc[i][id_col] if id_col else i
+    sf_i = surv_funcs[i]
+    probs = survival_prob_at_times(sf_i, timepoints_days) if timepoints_days else []
     risk = float(risk_scores[i])
     risk_group, _ = classify_risk(risk, risk_ref)
-    row = {"Patient": id_values[i], "Risk_Score": risk, "Risk_Group": risk_group}
+    row = {"Patient": pid, "Risk_Score": risk, "Risk_Group": risk_group}
     for y, p in zip(timepoints_years, probs):
         row[f"S(t={y}y)"] = p
     rows.append(row)
-
 res_df = pd.DataFrame(rows)
 
 st.divider()
 st.subheader("Predictions")
 st.dataframe(res_df, use_container_width=True)
-
-csv_preds = res_df.to_csv(index=False).encode("utf-8")
 st.download_button(
-    "Download predictions (CSV)",
-    data=csv_preds,
+    "Download predictions as CSV",
+    data=res_df.to_csv(index=False).encode("utf-8"),
     file_name="survival_predictions.csv",
     mime="text/csv",
     use_container_width=True,
 )
 
-# Survival plot (interactive zoom)
+# Survival curves
 st.subheader("Survival curve")
 
 plot_scope = "Single patient"
-if len(id_values) > 1:
+if len(X) > 1:
+    st.caption("Plot scope")
     plot_scope = st.radio(
         "Plot scope",
-        ["Single patient", "All patients"],
+        options=["Single patient", "All patients"],
         horizontal=True,
-        key="plot_scope",
+        label_visibility="collapsed",
     )
 
-show_legend = st.toggle("Show legend", value=True, key="show_legend") if plot_scope == "All patients" else False
-legend_limit = None
+show_legend = False
+legend_limit = 20
 if plot_scope == "All patients":
-    legend_limit = st.slider("Legend limit (patients)", 1, min(200, len(id_values)), min(20, len(id_values)), key="legend_limit")
+    show_legend = st.toggle("Show legend", value=False)
+    legend_limit = st.slider("Legend limit (patients)", min_value=5, max_value=min(200, len(X)), value=min(20, len(X)))
 
-if plot_scope == "Single patient":
-    sel = st.selectbox("Select patient", options=list(range(len(id_values))), format_func=lambda i: id_values[i], key="sel_patient")
-    to_plot = [(sel, id_values[sel])]
-else:
-    to_plot = list(enumerate(id_values))
+zoom = st.slider("Zoom", min_value=0.5, max_value=2.5, value=1.0, step=0.1)
 
-fig = go.Figure()
-for idx, label in to_plot:
-    sf = surv_funcs[idx]
-    # StepFunction has x/y; if not, sample a grid
+def _step_xy(step_fn, fallback_days=3650):
     try:
-        xs = np.asarray(sf.x, dtype=float)
-        ys = np.asarray(sf.y, dtype=float)
+        return step_fn.x, step_fn.y
     except Exception:
-        xs = np.linspace(0, 365.25 * max(timepoints_years + [10]), 400)
-        ys = np.array([sf(t) for t in xs], dtype=float)
+        xs_ = np.linspace(0, fallback_days, 200)
+        ys_ = np.array([step_fn(t) for t in xs_])
+        return xs_, ys_
 
-    fig.add_trace(
-        go.Scatter(
-            x=xs,
-            y=ys,
-            mode="lines",
-            name=label,
-            line_shape="hv",
-            showlegend=(plot_scope == "All patients" and show_legend and (legend_limit is None or idx < legend_limit)),
-        )
-    )
+fig, ax = plt.subplots()
+ax.set_xlabel("Time (days)")
+ax.set_ylabel("Survival probability")
+ax.set_ylim(0, 1.02)
+ax.grid(True, alpha=0.3)
 
-fig.update_layout(
-    height=520,
-    margin=dict(l=40, r=20, t=20, b=40),
-    xaxis_title="Time (days)",
-    yaxis_title="Survival probability",
-    yaxis=dict(range=[0, 1.02]),
-    legend=dict(orientation="h") if plot_scope == "All patients" else dict(),
+selected_index = 0
+if plot_scope == "Single patient":
+    sel_options = list(range(len(X)))
+    if id_col:
+        labels = df_used[id_col].astype(str).tolist()
+        selected_index = st.selectbox("Select patient", options=sel_options, format_func=lambda i: labels[i])
+    else:
+        selected_index = st.selectbox("Select patient (row index)", options=sel_options)
+
+    xs, ys = _step_xy(surv_funcs[selected_index], fallback_days=int(max(timepoints_days + [3650])))
+    ax.step(xs, ys, where="post")
+
+else:
+    # Plot all patients with default matplotlib color cycle
+    fallback = int(max(timepoints_days + [3650]))
+    for i in range(len(X)):
+        xs, ys = _step_xy(surv_funcs[i], fallback_days=fallback)
+        label = None
+        if show_legend and i < legend_limit:
+            label = str(df_used.iloc[i][id_col]) if id_col else f"{i}"
+        ax.step(xs, ys, where="post", label=label)
+    if show_legend:
+        ax.legend(loc="best", fontsize=8)
+
+# Render as an image so "zoom" is a real UI control
+buf = BytesIO()
+fig.savefig(buf, format="png", dpi=160, bbox_inches="tight")
+buf.seek(0)
+
+base_width = 1100
+st.image(buf.getvalue(), width=int(base_width * zoom))
+st.download_button(
+    "Download plot (PNG)",
+    data=buf.getvalue(),
+    file_name="survival_curve.png",
+    mime="image/png",
+    use_container_width=True,
 )
 
-st.plotly_chart(fig, use_container_width=True)
-
-# Detail panel (single patient)
+# Detail panel (single-patient only)
 if plot_scope == "Single patient":
     st.subheader("Selected patient details")
-    risk = float(risk_scores[sel])
+    pid = df_used.iloc[selected_index][id_col] if id_col else selected_index
+    risk = float(risk_scores[selected_index])
     risk_group, _ = classify_risk(risk, risk_ref)
+
     detail_cols = st.columns(3)
-    detail_cols[0].metric("Patient", str(id_values[sel]))
+    detail_cols[0].metric("Patient", str(pid))
     detail_cols[1].metric("Risk score", f"{risk:.4f}")
     detail_cols[2].metric("Risk group", risk_group if risk_group else "—")
 
     if timepoints_years:
-        probs = survival_prob_at_times(surv_funcs[sel], timepoints_days)
+        probs = survival_prob_at_times(surv_funcs[selected_index], timepoints_days)
         prob_df = pd.DataFrame({"Year": timepoints_years, "Survival probability": probs})
         st.table(prob_df)
