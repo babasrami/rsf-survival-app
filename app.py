@@ -9,60 +9,6 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="RSF Survival Predictor", layout="wide")
 
-# -----------------------------
-# Fixed protein/ADAM features (UI display)
-# -----------------------------
-PROTEIN_FEATURES_DISPLAY = [
-    "ADAM15",
-    "ADAMTS8",
-    "MMP7",
-    "MMP15",
-    "ADAMTSL1",
-    "MMP13",
-    "MMP1",
-    "MMP12",
-    "MMP23",
-    "MMP26",
-    "ADAMTS7",
-    "MMP28",
-    "MMP9",
-    "MMP25",
-]
-
-# Session state keys
-if "_pred" not in st.session_state:
-    st.session_state["_pred"] = None  # stores computed predictions so plot settings update without re-click
-
-# -----------------------------
-# UI theme / styling
-# -----------------------------
-st.markdown(
-    """
-    <style>
-      /* Dark sidebar */
-      section[data-testid="stSidebar"] > div {
-        background: radial-gradient(900px 600px at 10% 10%, rgba(255,255,255,0.08), rgba(0,0,0,0.0)),
-                    linear-gradient(180deg, #0b1020 0%, #070a12 100%);
-        border-right: 1px solid rgba(255,255,255,0.08);
-      }
-      section[data-testid="stSidebar"] * {
-        color: rgba(255,255,255,0.92);
-      }
-      /* Cards */
-      .rsf-card {
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 16px;
-        padding: 16px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-        backdrop-filter: blur(10px);
-      }
-      .rsf-muted { color: rgba(255,255,255,0.70); }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 # ---------------------------
 # Helpers
 # ---------------------------
@@ -307,9 +253,9 @@ timepoints_days = [y * 365.25 for y in timepoints_years]
 
 st.sidebar.divider()
 st.sidebar.subheader("Bundle summary")
-st.sidebar.write(f"Model features in bundle: {len(features)}")
-st.sidebar.subheader("Protein/ADAM features expected")
-st.sidebar.code("\n".join(PROTEIN_FEATURES_DISPLAY))
+st.sidebar.write(f"Features expected: {len(features)}")
+if features:
+    st.sidebar.code("\n".join(features[:20]) + ("\n..." if len(features) > 20 else ""))
 
 if not data_file:
     st.info("Upload a patient data file to proceed.")
@@ -343,156 +289,86 @@ with right:
 
     run_btn = st.button("Predict survival", type="primary", use_container_width=True)
 
-# Compute predictions only when the button is clicked. After that, keep results in
-# session_state so changing plot/table settings updates instantly.
-if run_btn:
-    try:
-        X = preprocess_for_model(df_edit, bundle=bundle, input_is_raw_ptpm=input_is_raw)
-    except Exception as e:
-        st.error(f"Preprocessing failed: {e}")
-        st.session_state["_pred"] = None
-    else:
-        try:
-            surv_funcs = model.predict_survival_function(X.values, return_array=False)
-            risk_scores = model.predict(X.values)
-        except Exception as e:
-            st.error(f"Model prediction failed: {e}")
-            st.session_state["_pred"] = None
-        else:
-            st.session_state["_pred"] = {
-                "X": X,
-                "surv_funcs": surv_funcs,
-                "risk_scores": risk_scores,
-                "id_col": id_col,
-                "df": df_edit.copy(),
-            }
-
-pred = st.session_state.get("_pred")
-if pred is None:
-    st.info("Upload data, edit if needed, then click **Predict survival**.")
+if not run_btn:
     st.stop()
 
-X = pred["X"]
-surv_funcs = pred["surv_funcs"]
-risk_scores = pred["risk_scores"]
-id_col = pred["id_col"]
-df_used = pred["df"]
+# Build X
+try:
+    X = preprocess_for_model(df_edit, bundle=bundle, input_is_raw_ptpm=input_is_raw)
+except Exception as e:
+    st.error(f"Preprocessing failed: {e}")
+    st.stop()
 
-# Results table (recomputed from stored survival functions so it updates with timepoint settings)
+# Predict
+try:
+    surv_funcs = model.predict_survival_function(X.values, return_array=False)
+    risk_scores = model.predict(X.values)
+except Exception as e:
+    st.error(f"Model prediction failed: {e}")
+    st.stop()
+
+# Results table
 rows = []
 for i in range(len(X)):
-    pid = df_used.iloc[i][id_col] if id_col else i
-    sf_i = surv_funcs[i]
-    probs = survival_prob_at_times(sf_i, timepoints_days) if timepoints_days else []
+    pid = df_edit.iloc[i][id_col] if id_col else i
+    sf = surv_funcs[i]
+    probs = survival_prob_at_times(sf, timepoints_days) if timepoints_days else []
     risk = float(risk_scores[i])
     risk_group, _ = classify_risk(risk, risk_ref)
     row = {"Patient": pid, "Risk_Score": risk, "Risk_Group": risk_group}
     for y, p in zip(timepoints_years, probs):
         row[f"S(t={y}y)"] = p
     rows.append(row)
+
 res_df = pd.DataFrame(rows)
 
 st.divider()
 st.subheader("Predictions")
 st.dataframe(res_df, use_container_width=True)
-st.download_button(
-    "Download predictions as CSV",
-    data=res_df.to_csv(index=False).encode("utf-8"),
-    file_name="survival_predictions.csv",
-    mime="text/csv",
-    use_container_width=True,
-)
 
-# Survival curves
+# Plot per-patient survival curve
 st.subheader("Survival curve")
+sel_options = list(range(len(X)))
+sel_label = None
+if id_col:
+    sel_label = df_edit[id_col].astype(str).tolist()
+    sel = st.selectbox("Select patient", options=sel_options, format_func=lambda i: sel_label[i])
+else:
+    sel = st.selectbox("Select patient (row index)", options=sel_options)
 
-plot_scope = "Single patient"
-if len(X) > 1:
-    st.caption("Plot scope")
-    plot_scope = st.radio(
-        "Plot scope",
-        options=["Single patient", "All patients"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
+sf = surv_funcs[sel]
+# StepFunction has x and y
+try:
+    xs = sf.x
+    ys = sf.y
+except Exception:
+    # fallback: sample along a grid
+    xs = np.linspace(0, np.nanmax(df_edit.get("days", pd.Series([3650]))), 200)
+    ys = np.array([sf(t) for t in xs])
 
-show_legend = True
-legend_limit = 20
-if plot_scope == "All patients":
-    # Keep the legend always on, but allow limiting how many patient labels are shown.
-    max_leg = min(200, len(X))
-    legend_limit = st.slider(
-        "Legend limit (patients)",
-        min_value=1,
-        max_value=max_leg,
-        value=min(20, max_leg),
-    )
-
-def _step_xy(step_fn, fallback_days=3650):
-    try:
-        return step_fn.x, step_fn.y
-    except Exception:
-        xs_ = np.linspace(0, fallback_days, 200)
-        ys_ = np.array([step_fn(t) for t in xs_])
-        return xs_, ys_
-
-fig, ax = plt.subplots()
+# Smaller on-screen plot, higher DPI for crisp rendering.
+# Streamlit scales the image to the container width; the figure *height* mainly
+# comes from figsize, so keep it modest while using a higher DPI.
+fig, ax = plt.subplots(figsize=(9.0, 4.2), dpi=220, constrained_layout=True)
+ax.step(xs, ys, where="post")
 ax.set_xlabel("Time (days)")
 ax.set_ylabel("Survival probability")
 ax.set_ylim(0, 1.02)
 ax.grid(True, alpha=0.3)
+st.pyplot(fig, clear_figure=True)
 
-selected_index = 0
-if plot_scope == "Single patient":
-    sel_options = list(range(len(X)))
-    if id_col:
-        labels = df_used[id_col].astype(str).tolist()
-        selected_index = st.selectbox("Select patient", options=sel_options, format_func=lambda i: labels[i])
-    else:
-        selected_index = st.selectbox("Select patient (row index)", options=sel_options)
+# Detail panel
+st.subheader("Selected patient details")
+pid = df_edit.iloc[sel][id_col] if id_col else sel
+risk = float(risk_scores[sel])
+risk_group, _ = classify_risk(risk, risk_ref)
 
-    xs, ys = _step_xy(surv_funcs[selected_index], fallback_days=int(max(timepoints_days + [3650])))
-    ax.step(xs, ys, where="post")
+detail_cols = st.columns(3)
+detail_cols[0].metric("Patient", str(pid))
+detail_cols[1].metric("Risk score", f"{risk:.4f}")
+detail_cols[2].metric("Risk group", risk_group if risk_group else "—")
 
-else:
-    # Plot all patients with default matplotlib color cycle
-    fallback = int(max(timepoints_days + [3650]))
-    for i in range(len(X)):
-        xs, ys = _step_xy(surv_funcs[i], fallback_days=fallback)
-        label = None
-        if show_legend and i < legend_limit:
-            label = str(df_used.iloc[i][id_col]) if id_col else f"{i}"
-        ax.step(xs, ys, where="post", label=label)
-    if show_legend:
-        ax.legend(loc="best", fontsize=8)
-
-st.pyplot(fig, use_container_width=True)
-
-# Download plot
-buf = io.BytesIO()
-fig.savefig(buf, format="png", dpi=160, bbox_inches="tight")
-buf.seek(0)
-st.download_button(
-    "Download plot (PNG)",
-    data=buf.getvalue(),
-    file_name="survival_curve.png",
-    mime="image/png",
-    use_container_width=True,
-)
-
-# Detail panel (single-patient only)
-if plot_scope == "Single patient":
-    st.subheader("Selected patient details")
-    pid = df_used.iloc[selected_index][id_col] if id_col else selected_index
-    risk = float(risk_scores[selected_index])
-    risk_group, _ = classify_risk(risk, risk_ref)
-
-    detail_cols = st.columns(3)
-    detail_cols[0].metric("Patient", str(pid))
-    detail_cols[1].metric("Risk score", f"{risk:.4f}")
-    detail_cols[2].metric("Risk group", risk_group if risk_group else "—")
-
-    if timepoints_years:
-        probs = survival_prob_at_times(surv_funcs[selected_index], timepoints_days)
-        prob_df = pd.DataFrame({"Year": timepoints_years, "Survival probability": probs})
-        st.table(prob_df)
+if timepoints_years:
+    probs = survival_prob_at_times(sf, timepoints_days)
+    prob_df = pd.DataFrame({"Year": timepoints_years, "Survival probability": probs})
+    st.table(prob_df)
