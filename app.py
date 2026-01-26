@@ -25,33 +25,46 @@ def inject_custom_css():
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
     /* ============================================
-       ROOT VARIABLES & GLOBAL STYLES
+       ROOT VARIABLES - BLACK, WHITE, GREY, PURPLE
     ============================================ */
     :root {
-        --bg-gradient-start: #0f0c29;
-        --bg-gradient-mid: #302b63;
-        --bg-gradient-end: #24243e;
-        --glass-bg: rgba(255, 255, 255, 0.03);
-        --glass-border: rgba(255, 255, 255, 0.08);
-        --glass-shadow: rgba(0, 0, 0, 0.3);
-        --accent-cyan: #00d4ff;
-        --accent-purple: #7b2cbf;
-        --accent-pink: #ff006e;
-        --accent-green: #00ff88;
-        --accent-gold: #ffb700;
-        --text-primary: #ffffff;
-        --text-secondary: rgba(255, 255, 255, 0.7);
-        --text-muted: rgba(255, 255, 255, 0.5);
+        --bg-dark: #0a0a0f;
+        --bg-mid: #121218;
+        --bg-light: #1a1a24;
+        --glass-bg: rgba(255, 255, 255, 0.02);
+        --glass-border: rgba(255, 255, 255, 0.06);
+        --glass-shadow: rgba(0, 0, 0, 0.5);
+        --purple-dark: #4a1d6a;
+        --purple-main: #7c3aed;
+        --purple-light: #a78bfa;
+        --purple-glow: rgba(124, 58, 237, 0.3);
+        --grey-100: #f8f8f8;
+        --grey-200: #e0e0e0;
+        --grey-300: #b0b0b0;
+        --grey-400: #808080;
+        --grey-500: #606060;
+        --grey-600: #404040;
+        --grey-700: #2a2a2a;
+        --grey-800: #1a1a1a;
+        --text-primary: rgba(255, 255, 255, 0.95);
+        --text-secondary: rgba(255, 255, 255, 0.65);
+        --text-muted: rgba(255, 255, 255, 0.40);
     }
     
-    /* Main app background */
+    /* ============================================
+       MAIN APP BACKGROUND - FADED DARK
+    ============================================ */
     .stApp {
-        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-mid) 50%, var(--bg-gradient-end) 100%);
+        background: linear-gradient(160deg, 
+            var(--bg-dark) 0%, 
+            var(--bg-mid) 40%, 
+            #0d0d14 70%,
+            var(--bg-dark) 100%);
         background-attachment: fixed;
         font-family: 'Inter', sans-serif;
     }
     
-    /* Animated background overlay */
+    /* Subtle purple ambient glow overlay */
     .stApp::before {
         content: '';
         position: fixed;
@@ -60,9 +73,9 @@ def inject_custom_css():
         width: 100%;
         height: 100%;
         background: 
-            radial-gradient(ellipse at 20% 80%, rgba(123, 44, 191, 0.15) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 20%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
-            radial-gradient(ellipse at 40% 40%, rgba(255, 0, 110, 0.05) 0%, transparent 40%);
+            radial-gradient(ellipse at 10% 90%, rgba(124, 58, 237, 0.08) 0%, transparent 50%),
+            radial-gradient(ellipse at 90% 10%, rgba(124, 58, 237, 0.05) 0%, transparent 45%),
+            radial-gradient(ellipse at 50% 50%, rgba(60, 60, 80, 0.03) 0%, transparent 60%);
         pointer-events: none;
         z-index: 0;
     }
@@ -76,12 +89,17 @@ def inject_custom_css():
         z-index: 1;
     }
     
-    /* Glass card effect for major sections */
+    /* ============================================
+       SIDEBAR - DARK GLASS
+    ============================================ */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, rgba(15, 12, 41, 0.95) 0%, rgba(48, 43, 99, 0.9) 100%) !important;
-        border-right: 1px solid var(--glass-border);
+        background: linear-gradient(180deg, 
+            rgba(18, 18, 26, 0.98) 0%, 
+            rgba(12, 12, 18, 0.99) 100%) !important;
+        border-right: 1px solid rgba(124, 58, 237, 0.15);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.5);
     }
     
     section[data-testid="stSidebar"] .stMarkdown,
@@ -90,133 +108,170 @@ def inject_custom_css():
         color: var(--text-primary) !important;
     }
     
-    /* Expander styling */
+    section[data-testid="stSidebar"] .stDivider {
+        background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.4), transparent) !important;
+    }
+    
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: var(--text-primary) !important;
+        background: none !important;
+        -webkit-text-fill-color: var(--text-primary) !important;
+    }
+    
+    section[data-testid="stSidebar"] code {
+        background: rgba(124, 58, 237, 0.15) !important;
+        color: var(--purple-light) !important;
+        border: 1px solid rgba(124, 58, 237, 0.25);
+        border-radius: 6px;
+    }
+    
+    /* ============================================
+       EXPANDER STYLING
+    ============================================ */
     .streamlit-expanderHeader {
-        background: var(--glass-bg) !important;
+        background: rgba(255, 255, 255, 0.02) !important;
         border: 1px solid var(--glass-border) !important;
         border-radius: 12px !important;
         color: var(--text-primary) !important;
         font-weight: 500;
         transition: all 0.3s ease;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
     
     .streamlit-expanderHeader:hover {
-        background: rgba(255, 255, 255, 0.08) !important;
-        border-color: var(--accent-cyan) !important;
-        box-shadow: 0 4px 20px rgba(0, 212, 255, 0.15);
+        background: rgba(255, 255, 255, 0.04) !important;
+        border-color: rgba(124, 58, 237, 0.3) !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 20px var(--purple-glow);
         transform: translateY(-2px);
     }
     
     .streamlit-expanderContent {
-        background: rgba(0, 0, 0, 0.2) !important;
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple), var(--accent-pink));
-        border-radius: 16px 16px 0 0;
+        background: rgba(0, 0, 0, 0.25) !important;
+        border: 1px solid var(--glass-border) !important;
+        border-top: none !important;
+        border-radius: 0 0 12px 12px !important;
+    }
+    
+    /* ============================================
+       METRIC CARDS WITH SHADOWS
+    ============================================ */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 20px 24px;
+        box-shadow: 
+            0 10px 40px rgba(0, 0, 0, 0.4),
+            0 4px 12px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
     
     div[data-testid="stMetric"]:hover {
-        transform: translateY(-8px) scale(1.02);
+        transform: translateY(-6px) scale(1.02);
         box-shadow: 
-            0 20px 40px rgba(0, 0, 0, 0.4),
-            0 8px 16px rgba(0, 212, 255, 0.15),
-            inset 0 1px 0 rgba(255, 255, 255, 0.15);
-        border-color: rgba(0, 212, 255, 0.3);
+            0 20px 50px rgba(0, 0, 0, 0.5),
+            0 10px 25px rgba(124, 58, 237, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        border-color: rgba(124, 58, 237, 0.25);
     }
     
     div[data-testid="stMetric"] label {
-        color: var(--text-secondary) !important;
-        font-size: 0.85rem;
+        color: var(--grey-400) !important;
+        font-size: 0.8rem;
         font-weight: 500;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.8px;
     }
     
     div[data-testid="stMetric"] [data-testid="stMetricValue"] {
         color: var(--text-primary) !important;
-        font-size: 1.8rem !important;
+        font-size: 1.75rem !important;
         font-weight: 700;
-        text-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
     }
     
     /* ============================================
-       BUTTONS - NEON GLOW EFFECT
+       3D BUTTONS WITH SHADOWS
     ============================================ */
-    .stButton > button {
-        background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-purple) 100%) !important;
+    .stButton > button,
+    .stDownloadButton > button {
+        background: linear-gradient(145deg, 
+            var(--purple-main) 0%, 
+            var(--purple-dark) 100%) !important;
         color: white !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 12px 32px !important;
+        border: 1px solid rgba(167, 139, 250, 0.3) !important;
+        border-radius: 14px !important;
+        padding: 14px 32px !important;
         font-weight: 600 !important;
-        font-size: 1rem !important;
-        letter-spacing: 0.5px;
+        font-size: 0.95rem !important;
+        letter-spacing: 0.3px;
         box-shadow: 
-            0 4px 15px rgba(0, 212, 255, 0.4),
-            0 2px 4px rgba(0, 0, 0, 0.2),
-            inset 0 1px 0 rgba(255, 255, 255, 0.2);
-        transition: all 0.3s ease;
+            0 8px 25px rgba(0, 0, 0, 0.4),
+            0 4px 10px rgba(124, 58, 237, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15),
+            inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
         overflow: hidden;
     }
     
-    .stButton > button::before {
+    .stButton > button::before,
+    .stDownloadButton > button::before {
         content: '';
         position: absolute;
         top: -50%;
         left: -50%;
         width: 200%;
         height: 200%;
-        background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+        background: linear-gradient(45deg, transparent, rgba(255,255,255,0.08), transparent);
         transform: rotate(45deg);
         transition: all 0.5s ease;
     }
     
-    .stButton > button:hover {
-        transform: translateY(-3px) scale(1.02);
+    .stButton > button:hover,
+    .stDownloadButton > button:hover {
+        transform: translateY(-4px) scale(1.02);
         box-shadow: 
-            0 8px 30px rgba(0, 212, 255, 0.6),
-            0 4px 10px rgba(123, 44, 191, 0.4),
-            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            0 15px 40px rgba(0, 0, 0, 0.5),
+            0 8px 20px rgba(124, 58, 237, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2),
+            inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+        border-color: rgba(167, 139, 250, 0.5) !important;
     }
     
-    .stButton > button:hover::before {
+    .stButton > button:hover::before,
+    .stDownloadButton > button:hover::before {
         left: 100%;
     }
     
-    .stButton > button:active {
-        transform: translateY(-1px) scale(0.98);
-    }
-    
-    /* Primary button with extra glow */
-    button[kind="primary"], .stButton > button[data-testid="stBaseButton-primary"] {
-        animation: pulse-glow 2s infinite;
-    }
-    
-    @keyframes pulse-glow {
-        0%, 100% { box-shadow: 0 4px 15px rgba(0, 212, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.2); }
-        50% { box-shadow: 0 6px 25px rgba(0, 212, 255, 0.6), 0 4px 8px rgba(123, 44, 191, 0.3); }
+    .stButton > button:active,
+    .stDownloadButton > button:active {
+        transform: translateY(0px) scale(0.98);
+        box-shadow: 
+            0 4px 15px rgba(0, 0, 0, 0.4),
+            0 2px 8px rgba(124, 58, 237, 0.2),
+            inset 0 2px 4px rgba(0, 0, 0, 0.3);
     }
     
     /* ============================================
        FILE UPLOADERS
     ============================================ */
     div[data-testid="stFileUploader"] {
-        background: var(--glass-bg);
-        border: 2px dashed var(--glass-border);
+        background: rgba(255, 255, 255, 0.015);
+        border: 2px dashed rgba(124, 58, 237, 0.25);
         border-radius: 16px;
-        padding: 20px;
+        padding: 24px;
         transition: all 0.3s ease;
+        box-shadow: 0 6px 25px rgba(0, 0, 0, 0.25);
     }
     
     div[data-testid="stFileUploader"]:hover {
-        border-color: var(--accent-cyan);
-        background: rgba(0, 212, 255, 0.05);
-        box-shadow: 0 0 30px rgba(0, 212, 255, 0.1);
+        border-color: rgba(124, 58, 237, 0.5);
+        background: rgba(124, 58, 237, 0.03);
+        box-shadow: 0 10px 35px rgba(0, 0, 0, 0.35), 0 0 25px var(--purple-glow);
     }
     
     div[data-testid="stFileUploader"] label {
@@ -230,7 +285,7 @@ def inject_custom_css():
     }
     
     div[data-testid="stFileUploader"] button {
-        background: rgba(255, 255, 255, 0.1) !important;
+        background: rgba(255, 255, 255, 0.05) !important;
         border: 1px solid var(--glass-border) !important;
         color: var(--text-primary) !important;
     }
@@ -239,11 +294,11 @@ def inject_custom_css():
        DATA TABLES
     ============================================ */
     .stDataFrame, div[data-testid="stDataFrame"] {
-        background: var(--glass-bg) !important;
+        background: rgba(255, 255, 255, 0.015) !important;
         border: 1px solid var(--glass-border) !important;
         border-radius: 16px !important;
         overflow: hidden;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
     }
     
     .stDataFrame table {
@@ -251,20 +306,20 @@ def inject_custom_css():
     }
     
     .stDataFrame th {
-        background: rgba(0, 212, 255, 0.1) !important;
-        color: var(--accent-cyan) !important;
+        background: rgba(124, 58, 237, 0.12) !important;
+        color: var(--purple-light) !important;
         font-weight: 600 !important;
-        border-bottom: 2px solid var(--accent-cyan) !important;
+        border-bottom: 1px solid rgba(124, 58, 237, 0.25) !important;
     }
     
     .stDataFrame td {
         background: transparent !important;
         color: var(--text-primary) !important;
-        border-bottom: 1px solid var(--glass-border) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
     }
     
     .stDataFrame tr:hover td {
-        background: rgba(255, 255, 255, 0.05) !important;
+        background: rgba(124, 58, 237, 0.05) !important;
     }
     
     /* ============================================
@@ -276,20 +331,23 @@ def inject_custom_css():
     }
     
     h1 {
-        background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-purple) 50%, var(--accent-pink) 100%);
+        background: linear-gradient(135deg, 
+            var(--grey-100) 0%, 
+            var(--purple-light) 50%, 
+            var(--grey-200) 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
         font-size: 2.5rem !important;
         font-weight: 700 !important;
-        text-shadow: none;
+        text-shadow: 0 4px 30px rgba(124, 58, 237, 0.3);
         margin-bottom: 1.5rem !important;
     }
     
     h2 {
         color: var(--text-primary) !important;
         position: relative;
-        padding-bottom: 10px;
+        padding-bottom: 12px;
     }
     
     h2::after {
@@ -297,10 +355,14 @@ def inject_custom_css():
         position: absolute;
         bottom: 0;
         left: 0;
-        width: 60px;
-        height: 3px;
-        background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+        width: 50px;
+        height: 2px;
+        background: linear-gradient(90deg, var(--purple-main), transparent);
         border-radius: 2px;
+    }
+    
+    h3 {
+        color: var(--grey-200) !important;
     }
     
     p, li, span, div {
@@ -308,14 +370,14 @@ def inject_custom_css():
     }
     
     .stMarkdown a {
-        color: var(--accent-cyan) !important;
+        color: var(--purple-light) !important;
         text-decoration: none;
         transition: all 0.2s ease;
     }
     
     .stMarkdown a:hover {
-        color: var(--accent-pink) !important;
-        text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        color: var(--grey-100) !important;
+        text-shadow: 0 0 10px var(--purple-glow);
     }
     
     /* ============================================
@@ -323,21 +385,31 @@ def inject_custom_css():
     ============================================ */
     .stSelectbox > div > div,
     .stMultiSelect > div > div {
-        background: var(--glass-bg) !important;
+        background: rgba(255, 255, 255, 0.02) !important;
         border: 1px solid var(--glass-border) !important;
-        border-radius: 10px !important;
+        border-radius: 12px !important;
         color: var(--text-primary) !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
     
     .stSelectbox > div > div:hover,
     .stMultiSelect > div > div:hover {
-        border-color: var(--accent-cyan) !important;
-        box-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
+        border-color: rgba(124, 58, 237, 0.3) !important;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), 0 0 15px var(--purple-glow);
     }
     
     .stSelectbox label,
     .stMultiSelect label {
         color: var(--text-primary) !important;
+    }
+    
+    /* Radio buttons */
+    .stRadio > div {
+        background: rgba(255, 255, 255, 0.015);
+        border-radius: 12px;
+        padding: 8px;
+        border: 1px solid var(--glass-border);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
     
     /* Toggle styling */
@@ -350,17 +422,17 @@ def inject_custom_css():
     ============================================ */
     .stPlotlyChart, div[data-testid="stPlotlyChart"],
     div.stPyplot {
-        background: var(--glass-bg) !important;
+        background: rgba(255, 255, 255, 0.015) !important;
         border: 1px solid var(--glass-border) !important;
         border-radius: 16px !important;
         padding: 20px !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 12px 45px rgba(0, 0, 0, 0.4);
         transition: all 0.3s ease;
     }
     
     div.stPyplot:hover {
-        box-shadow: 0 12px 40px rgba(0, 212, 255, 0.15);
-        border-color: rgba(0, 212, 255, 0.3);
+        box-shadow: 0 18px 55px rgba(0, 0, 0, 0.5), 0 0 30px var(--purple-glow);
+        border-color: rgba(124, 58, 237, 0.2);
     }
     
     /* ============================================
@@ -369,8 +441,13 @@ def inject_custom_css():
     hr {
         border: none !important;
         height: 1px !important;
-        background: linear-gradient(90deg, transparent, var(--glass-border), var(--accent-cyan), var(--glass-border), transparent) !important;
-        margin: 2rem 0 !important;
+        background: linear-gradient(90deg, 
+            transparent, 
+            rgba(124, 58, 237, 0.3), 
+            rgba(255, 255, 255, 0.1), 
+            rgba(124, 58, 237, 0.3), 
+            transparent) !important;
+        margin: 2.5rem 0 !important;
     }
     
     /* ============================================
@@ -382,27 +459,28 @@ def inject_custom_css():
     }
     
     ::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.2);
+        background: rgba(0, 0, 0, 0.3);
         border-radius: 4px;
     }
     
     ::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, var(--accent-cyan), var(--accent-purple));
+        background: linear-gradient(180deg, var(--purple-main), var(--purple-dark));
         border-radius: 4px;
     }
     
     ::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(180deg, var(--accent-purple), var(--accent-pink));
+        background: linear-gradient(180deg, var(--purple-light), var(--purple-main));
     }
     
     /* ============================================
        INFO/WARNING/SUCCESS BOXES
     ============================================ */
     .stAlert {
-        background: var(--glass-bg) !important;
+        background: rgba(255, 255, 255, 0.02) !important;
         border: 1px solid var(--glass-border) !important;
         border-radius: 12px !important;
         backdrop-filter: blur(10px);
+        box-shadow: 0 6px 25px rgba(0, 0, 0, 0.25);
     }
     
     div[data-testid="stAlert"] > div {
@@ -411,39 +489,17 @@ def inject_custom_css():
     
     /* Info alert */
     div[role="alert"]:has(svg[data-testid="stInfoIcon"]) {
-        border-left: 4px solid var(--accent-cyan) !important;
+        border-left: 4px solid var(--purple-main) !important;
     }
     
     /* Warning alert */
     div[role="alert"]:has(svg[data-testid="stWarningIcon"]) {
-        border-left: 4px solid var(--accent-gold) !important;
+        border-left: 4px solid var(--grey-400) !important;
     }
     
     /* Success alert */
     div[role="alert"]:has(svg[data-testid="stSuccessIcon"]) {
-        border-left: 4px solid var(--accent-green) !important;
-    }
-    
-    /* ============================================
-       SIDEBAR EXTRAS
-    ============================================ */
-    section[data-testid="stSidebar"] .stDivider {
-        background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent) !important;
-    }
-    
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3 {
-        color: var(--text-primary) !important;
-        background: none !important;
-        -webkit-text-fill-color: var(--text-primary) !important;
-    }
-    
-    section[data-testid="stSidebar"] code {
-        background: rgba(0, 212, 255, 0.1) !important;
-        color: var(--accent-cyan) !important;
-        border: 1px solid rgba(0, 212, 255, 0.2);
-        border-radius: 6px;
+        border-left: 4px solid var(--purple-light) !important;
     }
     
     /* ============================================
@@ -458,14 +514,15 @@ def inject_custom_css():
        TABLE STYLING
     ============================================ */
     .stTable {
-        background: var(--glass-bg) !important;
+        background: rgba(255, 255, 255, 0.015) !important;
         border-radius: 12px;
         overflow: hidden;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
     }
     
     .stTable th {
-        background: rgba(0, 212, 255, 0.15) !important;
-        color: var(--accent-cyan) !important;
+        background: rgba(124, 58, 237, 0.12) !important;
+        color: var(--purple-light) !important;
     }
     
     .stTable td {
@@ -478,12 +535,12 @@ def inject_custom_css():
     ============================================ */
     @keyframes float {
         0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-10px); }
+        50% { transform: translateY(-8px); }
     }
     
-    @keyframes shimmer {
-        0% { background-position: -200% 0; }
-        100% { background-position: 200% 0; }
+    @keyframes subtle-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.85; }
     }
     
     /* Subtle floating animation for hero */
@@ -891,7 +948,7 @@ st.divider()
 st.markdown("""
 <div style="text-align: center; margin-bottom: 20px;">
     <span style="font-size: 2rem;">📈</span>
-    <h2 style="display: inline-block; margin-left: 10px; background: linear-gradient(135deg, #00d4ff, #7b2cbf); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+    <h2 style="display: inline-block; margin-left: 10px; background: linear-gradient(135deg, #f8f8f8, #a78bfa, #e0e0e0); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
         Prediction Results
     </h2>
 </div>
@@ -912,12 +969,12 @@ plot_mode = st.radio(
     key="plot_mode_selector"
 )
 
-# Color palette for multi-patient plot
+# Color palette for multi-patient plot - Purple/Grey theme
 PATIENT_COLORS = [
-    '#00d4ff', '#ff006e', '#00ff88', '#ffb700', '#7b2cbf', 
-    '#ff4d4d', '#4dff4d', '#4d4dff', '#ff4dff', '#4dffff',
-    '#ffaa00', '#aa00ff', '#00ffaa', '#ff0066', '#66ff00',
-    '#0066ff', '#ff6600', '#6600ff', '#00ff66', '#ff0099'
+    '#a78bfa', '#7c3aed', '#c4b5fd', '#6d28d9', '#ddd6fe',
+    '#b0b0b0', '#808080', '#e0e0e0', '#5b21b6', '#8b5cf6',
+    '#f8f8f8', '#4c1d95', '#ede9fe', '#606060', '#9333ea',
+    '#d8d8d8', '#7e22ce', '#a3a3a3', '#c084fc', '#404040'
 ]
 
 if plot_mode == "Single Patient":
@@ -952,16 +1009,16 @@ if plot_mode == "Single Patient":
     plt.style.use('dark_background')
     fig, ax = plt.subplots(figsize=(10, 5))
 
-    # Set figure and axes background
-    fig.patch.set_facecolor('#1a1a2e')
-    ax.set_facecolor('#1a1a2e')
+    # Set figure and axes background - dark theme
+    fig.patch.set_facecolor('#0a0a0f')
+    ax.set_facecolor('#0a0a0f')
 
-    # Plot survival curve with gradient-like effect
-    ax.fill_between(xs, ys, alpha=0.3, color='#00d4ff', step='post')
-    ax.step(xs, ys, where="post", color='#00d4ff', linewidth=2.5, label='Survival Probability')
+    # Plot survival curve with purple gradient effect
+    ax.fill_between(xs, ys, alpha=0.25, color='#7c3aed', step='post')
+    ax.step(xs, ys, where="post", color='#a78bfa', linewidth=2.5, label='Survival Probability')
 
     # Add glow effect
-    ax.step(xs, ys, where="post", color='#00d4ff', linewidth=6, alpha=0.2)
+    ax.step(xs, ys, where="post", color='#7c3aed', linewidth=6, alpha=0.15)
 
     # Styling
     ax.set_xlabel("Time (days)", fontsize=12, color='white', fontweight='500')
@@ -969,25 +1026,25 @@ if plot_mode == "Single Patient":
     ax.set_ylim(0, 1.05)
     ax.set_xlim(0, max(xs) if len(xs) > 0 else 3650)
 
-    # Grid styling
-    ax.grid(True, alpha=0.15, color='white', linestyle='--')
-    ax.spines['bottom'].set_color('#555')
-    ax.spines['left'].set_color('#555')
+    # Grid styling - subtle grey
+    ax.grid(True, alpha=0.1, color='#606060', linestyle='--')
+    ax.spines['bottom'].set_color('#404040')
+    ax.spines['left'].set_color('#404040')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    # Tick styling
-    ax.tick_params(colors='white', which='both')
+    # Tick styling - light grey
+    ax.tick_params(colors='#b0b0b0', which='both')
 
     # Add timepoint markers if available
     for y, t in zip(timepoints_years, timepoints_days):
         if t <= max(xs):
             prob = float(sf(t))
-            ax.axvline(x=t, color='#7b2cbf', linestyle=':', alpha=0.5)
-            ax.scatter([t], [prob], color='#ff006e', s=80, zorder=5, edgecolors='white', linewidths=1.5)
+            ax.axvline(x=t, color='#4a1d6a', linestyle=':', alpha=0.6)
+            ax.scatter([t], [prob], color='#e0e0e0', s=80, zorder=5, edgecolors='#7c3aed', linewidths=2)
             ax.annotate(f'{y}y: {prob:.1%}', (t, prob), textcoords="offset points", 
-                        xytext=(10, 10), fontsize=9, color='white',
-                        bbox=dict(boxstyle='round,pad=0.3', facecolor='#7b2cbf', alpha=0.7))
+                        xytext=(10, 10), fontsize=9, color='#f8f8f8',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='#4a1d6a', edgecolor='#7c3aed', alpha=0.85))
 
     plt.tight_layout()
     st.pyplot(fig, clear_figure=True)
@@ -1033,9 +1090,9 @@ else:
     plt.style.use('dark_background')
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    # Set figure and axes background
-    fig.patch.set_facecolor('#1a1a2e')
-    ax.set_facecolor('#1a1a2e')
+    # Set figure and axes background - dark theme
+    fig.patch.set_facecolor('#0a0a0f')
+    ax.set_facecolor('#0a0a0f')
 
     max_time = 3650  # Default max time
     
@@ -1070,24 +1127,24 @@ else:
     ax.set_ylim(0, 1.05)
     ax.set_xlim(0, max_time)
 
-    # Grid styling
-    ax.grid(True, alpha=0.15, color='white', linestyle='--')
-    ax.spines['bottom'].set_color('#555')
-    ax.spines['left'].set_color('#555')
+    # Grid styling - subtle grey
+    ax.grid(True, alpha=0.1, color='#606060', linestyle='--')
+    ax.spines['bottom'].set_color('#404040')
+    ax.spines['left'].set_color('#404040')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    # Tick styling
-    ax.tick_params(colors='white', which='both')
+    # Tick styling - light grey
+    ax.tick_params(colors='#b0b0b0', which='both')
 
-    # Legend on top right with glassmorphic style
+    # Legend on top right with dark glass style
     legend = ax.legend(
         loc='upper right',
         fontsize=9,
-        framealpha=0.85,
-        facecolor='#2a2a4e',
-        edgecolor='#555',
-        labelcolor='white',
+        framealpha=0.9,
+        facecolor='#121218',
+        edgecolor='#4a1d6a',
+        labelcolor='#e0e0e0',
         title='Patients',
         title_fontsize=10,
         ncol=min(3, (len(X) + 9) // 10)  # Adaptive columns
