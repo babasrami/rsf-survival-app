@@ -760,7 +760,7 @@ def get_risk_color(risk_group):
 # Hero header with icon
 st.markdown("""
 <div style="text-align: center; padding: 20px 0;">
-    <span style="font-size: 3.5rem;">🧬</span>
+    <span style="font-size: 3.5rem;"></span>
 </div>
 """, unsafe_allow_html=True)
 
