@@ -812,12 +812,16 @@ except Exception as e:
 id_candidates = [c for c in ["Sample", "Patient_ID", "patient_id", "id"] if c in df_in.columns]
 id_col = id_candidates[0] if id_candidates else None
 
+# Initialize session state for predictions
+if "_predictions" not in st.session_state:
+    st.session_state["_predictions"] = None
+
 left, right = st.columns([1, 1])
 
 with left:
     st.markdown("### ✏️ Input Data")
     st.caption("Edit values directly below. Use NA or blank for missing values.")
-    df_edit = st.data_editor(df_in, num_rows="dynamic", use_container_width=True)
+    df_edit = st.data_editor(df_in, num_rows="dynamic", use_container_width=True, key="data_editor")
 
 with right:
     st.markdown("### 🚀 Run Predictions")
@@ -829,28 +833,47 @@ with right:
     st.markdown("<br>", unsafe_allow_html=True)
     run_btn = st.button("🔬 Predict Survival", type="primary", use_container_width=True)
 
-if not run_btn:
+# Process predictions when button is clicked
+if run_btn:
+    try:
+        X = preprocess_for_model(df_edit, bundle=bundle, input_is_raw_ptpm=input_is_raw)
+    except Exception as e:
+        st.error(f"Preprocessing failed: {e}")
+        st.session_state["_predictions"] = None
+    else:
+        try:
+            surv_funcs = model.predict_survival_function(X.values, return_array=False)
+            risk_scores = model.predict(X.values)
+            # Store in session state
+            st.session_state["_predictions"] = {
+                "X": X,
+                "surv_funcs": surv_funcs,
+                "risk_scores": risk_scores,
+                "df": df_edit.copy(),
+                "id_col": id_col,
+            }
+        except Exception as e:
+            st.error(f"Model prediction failed: {e}")
+            st.session_state["_predictions"] = None
+
+# Get predictions from session state
+pred = st.session_state.get("_predictions")
+
+if pred is None:
+    st.info("📊 Upload data, edit if needed, then click **Predict Survival** to see results.")
     st.stop()
 
-# Build X
-try:
-    X = preprocess_for_model(df_edit, bundle=bundle, input_is_raw_ptpm=input_is_raw)
-except Exception as e:
-    st.error(f"Preprocessing failed: {e}")
-    st.stop()
-
-# Predict
-try:
-    surv_funcs = model.predict_survival_function(X.values, return_array=False)
-    risk_scores = model.predict(X.values)
-except Exception as e:
-    st.error(f"Model prediction failed: {e}")
-    st.stop()
+# Extract stored predictions
+X = pred["X"]
+surv_funcs = pred["surv_funcs"]
+risk_scores = pred["risk_scores"]
+df_used = pred["df"]
+id_col = pred["id_col"]
 
 # Results table
 rows = []
 for i in range(len(X)):
-    pid = df_edit.iloc[i][id_col] if id_col else i
+    pid = df_used.iloc[i][id_col] if id_col else i
     sf = surv_funcs[i]
     probs = survival_prob_at_times(sf, timepoints_days) if timepoints_days else []
     risk = float(risk_scores[i])
@@ -881,100 +904,240 @@ st.markdown("<br>", unsafe_allow_html=True)
 # Survival curve section
 st.markdown("### 📊 Survival Curve Analysis")
 
-sel_options = list(range(len(X)))
-if id_col:
-    sel_label = df_edit[id_col].astype(str).tolist()
-    sel = st.selectbox("Select patient for detailed analysis:", options=sel_options, format_func=lambda i: f"🧬 {sel_label[i]}")
+# Plot mode selection - Single patient vs All patients
+plot_mode = st.radio(
+    "Plot mode:",
+    options=["Single Patient", "All Patients"],
+    horizontal=True,
+    key="plot_mode_selector"
+)
+
+# Color palette for multi-patient plot
+PATIENT_COLORS = [
+    '#00d4ff', '#ff006e', '#00ff88', '#ffb700', '#7b2cbf', 
+    '#ff4d4d', '#4dff4d', '#4d4dff', '#ff4dff', '#4dffff',
+    '#ffaa00', '#aa00ff', '#00ffaa', '#ff0066', '#66ff00',
+    '#0066ff', '#ff6600', '#6600ff', '#00ff66', '#ff0099'
+]
+
+if plot_mode == "Single Patient":
+    # Single patient selector
+    sel_options = list(range(len(X)))
+    if id_col:
+        sel_label = df_used[id_col].astype(str).tolist()
+        sel = st.selectbox(
+            "Select patient for detailed analysis:", 
+            options=sel_options, 
+            format_func=lambda i: f"🧬 {sel_label[i]}",
+            key="patient_selector"
+        )
+    else:
+        sel = st.selectbox(
+            "Select patient (row index):", 
+            options=sel_options, 
+            format_func=lambda i: f"🧬 Patient {i}",
+            key="patient_selector"
+        )
+
+    sf = surv_funcs[sel]
+    # StepFunction has x and y
+    try:
+        xs = sf.x
+        ys = sf.y
+    except Exception:
+        xs = np.linspace(0, np.nanmax(df_used.get("days", pd.Series([3650]))), 200)
+        ys = np.array([sf(t) for t in xs])
+
+    # Enhanced matplotlib styling for dark theme
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # Set figure and axes background
+    fig.patch.set_facecolor('#1a1a2e')
+    ax.set_facecolor('#1a1a2e')
+
+    # Plot survival curve with gradient-like effect
+    ax.fill_between(xs, ys, alpha=0.3, color='#00d4ff', step='post')
+    ax.step(xs, ys, where="post", color='#00d4ff', linewidth=2.5, label='Survival Probability')
+
+    # Add glow effect
+    ax.step(xs, ys, where="post", color='#00d4ff', linewidth=6, alpha=0.2)
+
+    # Styling
+    ax.set_xlabel("Time (days)", fontsize=12, color='white', fontweight='500')
+    ax.set_ylabel("Survival Probability", fontsize=12, color='white', fontweight='500')
+    ax.set_ylim(0, 1.05)
+    ax.set_xlim(0, max(xs) if len(xs) > 0 else 3650)
+
+    # Grid styling
+    ax.grid(True, alpha=0.15, color='white', linestyle='--')
+    ax.spines['bottom'].set_color('#555')
+    ax.spines['left'].set_color('#555')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    # Tick styling
+    ax.tick_params(colors='white', which='both')
+
+    # Add timepoint markers if available
+    for y, t in zip(timepoints_years, timepoints_days):
+        if t <= max(xs):
+            prob = float(sf(t))
+            ax.axvline(x=t, color='#7b2cbf', linestyle=':', alpha=0.5)
+            ax.scatter([t], [prob], color='#ff006e', s=80, zorder=5, edgecolors='white', linewidths=1.5)
+            ax.annotate(f'{y}y: {prob:.1%}', (t, prob), textcoords="offset points", 
+                        xytext=(10, 10), fontsize=9, color='white',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='#7b2cbf', alpha=0.7))
+
+    plt.tight_layout()
+    st.pyplot(fig, clear_figure=True)
+
+    # Detail panel with enhanced metrics
+    st.markdown("### 🎯 Selected Patient Details")
+
+    pid = df_used.iloc[sel][id_col] if id_col else sel
+    risk = float(risk_scores[sel])
+    risk_group, _ = classify_risk(risk, risk_ref)
+
+    detail_cols = st.columns(3)
+    with detail_cols[0]:
+        st.metric("🧬 Patient", str(pid))
+    with detail_cols[1]:
+        st.metric("⚡ Risk Score", f"{risk:.4f}")
+    with detail_cols[2]:
+        risk_display = risk_group if risk_group else "—"
+        st.metric("🎯 Risk Group", risk_display)
+
+    if timepoints_years:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("#### 📅 Survival Probabilities at Key Timepoints")
+        probs = survival_prob_at_times(sf, timepoints_days)
+        
+        # Display as styled columns
+        prob_cols = st.columns(len(timepoints_years))
+        for i, (y, p) in enumerate(zip(timepoints_years, probs)):
+            with prob_cols[i]:
+                if p >= 0.7:
+                    emoji = "🟢"
+                elif p >= 0.4:
+                    emoji = "🟡"
+                else:
+                    emoji = "🔴"
+                st.metric(f"{emoji} Year {y}", f"{p:.1%}")
+
 else:
-    sel = st.selectbox("Select patient (row index):", options=sel_options, format_func=lambda i: f"🧬 Patient {i}")
-
-sf = surv_funcs[sel]
-# StepFunction has x and y
-try:
-    xs = sf.x
-    ys = sf.y
-except Exception:
-    # fallback: sample along a grid
-    xs = np.linspace(0, np.nanmax(df_edit.get("days", pd.Series([3650]))), 200)
-    ys = np.array([sf(t) for t in xs])
-
-# Enhanced matplotlib styling for dark theme
-plt.style.use('dark_background')
-fig, ax = plt.subplots(figsize=(10, 5))
-
-# Set figure and axes background
-fig.patch.set_facecolor('#1a1a2e')
-ax.set_facecolor('#1a1a2e')
-
-# Plot survival curve with gradient-like effect
-ax.fill_between(xs, ys, alpha=0.3, color='#00d4ff', step='post')
-ax.step(xs, ys, where="post", color='#00d4ff', linewidth=2.5, label='Survival Probability')
-
-# Add glow effect
-ax.step(xs, ys, where="post", color='#00d4ff', linewidth=6, alpha=0.2)
-
-# Styling
-ax.set_xlabel("Time (days)", fontsize=12, color='white', fontweight='500')
-ax.set_ylabel("Survival Probability", fontsize=12, color='white', fontweight='500')
-ax.set_ylim(0, 1.05)
-ax.set_xlim(0, max(xs) if len(xs) > 0 else 3650)
-
-# Grid styling
-ax.grid(True, alpha=0.15, color='white', linestyle='--')
-ax.spines['bottom'].set_color('#555')
-ax.spines['left'].set_color('#555')
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-
-# Tick styling
-ax.tick_params(colors='white', which='both')
-
-# Add timepoint markers if available
-for y, t in zip(timepoints_years, timepoints_days):
-    if t <= max(xs):
-        prob = float(sf(t))
-        ax.axvline(x=t, color='#7b2cbf', linestyle=':', alpha=0.5)
-        ax.scatter([t], [prob], color='#ff006e', s=80, zorder=5, edgecolors='white', linewidths=1.5)
-        ax.annotate(f'{y}y: {prob:.1%}', (t, prob), textcoords="offset points", 
-                    xytext=(10, 10), fontsize=9, color='white',
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='#7b2cbf', alpha=0.7))
-
-plt.tight_layout()
-st.pyplot(fig, clear_figure=True)
-
-# Detail panel with enhanced metrics
-st.markdown("### 🎯 Selected Patient Details")
-
-pid = df_edit.iloc[sel][id_col] if id_col else sel
-risk = float(risk_scores[sel])
-risk_group, _ = classify_risk(risk, risk_ref)
-
-detail_cols = st.columns(3)
-with detail_cols[0]:
-    st.metric("🧬 Patient", str(pid))
-with detail_cols[1]:
-    st.metric("⚡ Risk Score", f"{risk:.4f}")
-with detail_cols[2]:
-    risk_display = risk_group if risk_group else "—"
-    st.metric("🎯 Risk Group", risk_display)
-
-if timepoints_years:
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("#### 📅 Survival Probabilities at Key Timepoints")
-    probs = survival_prob_at_times(sf, timepoints_days)
+    # All Patients plot
+    st.caption("Comparing survival curves for all patients with color-coded legend")
     
-    # Display as styled columns
-    prob_cols = st.columns(len(timepoints_years))
-    for i, (y, p) in enumerate(zip(timepoints_years, probs)):
-        with prob_cols[i]:
-            # Color based on probability
-            if p >= 0.7:
-                emoji = "🟢"
-            elif p >= 0.4:
-                emoji = "🟡"
-            else:
-                emoji = "🔴"
-            st.metric(f"{emoji} Year {y}", f"{p:.1%}")
+    # Enhanced matplotlib styling for dark theme
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Set figure and axes background
+    fig.patch.set_facecolor('#1a1a2e')
+    ax.set_facecolor('#1a1a2e')
+
+    max_time = 3650  # Default max time
+    
+    # Plot each patient with a different color
+    for i in range(len(X)):
+        sf = surv_funcs[i]
+        color = PATIENT_COLORS[i % len(PATIENT_COLORS)]
+        
+        # Get patient label
+        if id_col:
+            label = str(df_used.iloc[i][id_col])
+        else:
+            label = f"Patient {i}"
+        
+        try:
+            xs = sf.x
+            ys = sf.y
+        except Exception:
+            xs = np.linspace(0, 3650, 200)
+            ys = np.array([sf(t) for t in xs])
+        
+        if len(xs) > 0:
+            max_time = max(max_time, max(xs))
+        
+        # Plot with slight glow effect
+        ax.step(xs, ys, where="post", color=color, linewidth=4, alpha=0.15)  # Glow
+        ax.step(xs, ys, where="post", color=color, linewidth=2, label=label, alpha=0.9)
+
+    # Styling
+    ax.set_xlabel("Time (days)", fontsize=12, color='white', fontweight='500')
+    ax.set_ylabel("Survival Probability", fontsize=12, color='white', fontweight='500')
+    ax.set_ylim(0, 1.05)
+    ax.set_xlim(0, max_time)
+
+    # Grid styling
+    ax.grid(True, alpha=0.15, color='white', linestyle='--')
+    ax.spines['bottom'].set_color('#555')
+    ax.spines['left'].set_color('#555')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    # Tick styling
+    ax.tick_params(colors='white', which='both')
+
+    # Legend on top right with glassmorphic style
+    legend = ax.legend(
+        loc='upper right',
+        fontsize=9,
+        framealpha=0.85,
+        facecolor='#2a2a4e',
+        edgecolor='#555',
+        labelcolor='white',
+        title='Patients',
+        title_fontsize=10,
+        ncol=min(3, (len(X) + 9) // 10)  # Adaptive columns
+    )
+    legend.get_title().set_color('white')
+
+    plt.tight_layout()
+    st.pyplot(fig, clear_figure=True)
+
+    # Summary statistics for all patients
+    st.markdown("### 📊 Summary Statistics")
+    
+    avg_risk = np.mean(risk_scores)
+    min_risk = np.min(risk_scores)
+    max_risk = np.max(risk_scores)
+    
+    stat_cols = st.columns(4)
+    with stat_cols[0]:
+        st.metric("👥 Total Patients", len(X))
+    with stat_cols[1]:
+        st.metric("📉 Min Risk Score", f"{min_risk:.4f}")
+    with stat_cols[2]:
+        st.metric("📈 Max Risk Score", f"{max_risk:.4f}")
+    with stat_cols[3]:
+        st.metric("📊 Avg Risk Score", f"{avg_risk:.4f}")
+
+# Download buttons
+st.markdown("<br>", unsafe_allow_html=True)
+col_dl1, col_dl2 = st.columns(2)
+with col_dl1:
+    csv_data = res_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        "📥 Download Predictions (CSV)",
+        data=csv_data,
+        file_name="survival_predictions.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+with col_dl2:
+    # Save current plot to buffer
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=150, facecolor='#1a1a2e', bbox_inches='tight')
+    buf.seek(0)
+    st.download_button(
+        "📥 Download Plot (PNG)",
+        data=buf,
+        file_name="survival_curves.png",
+        mime="image/png",
+        use_container_width=True
+    )
 
 # Footer
 st.markdown("<br><br>", unsafe_allow_html=True)
