@@ -572,53 +572,115 @@ with dcol2:
     )
 
 st.subheader("Survival curve")
-sel_options = list(range(len(X)))
-if id_col:
-    sel_label = df_edit[id_col].astype(str).tolist()
-    sel = st.selectbox("Select patient", options=sel_options, format_func=lambda i: sel_label[i])
+
+n_patients = len(X)
+plot_scope = "Single patient" if n_patients == 1 else st.radio(
+    "Plot scope",
+    options=["Single patient", "All patients"],
+    horizontal=True,
+)
+
+def _get_xy(sf_obj):
+    try:
+        xs_ = np.asarray(sf_obj.x, dtype=float)
+        ys_ = np.asarray(sf_obj.y, dtype=float)
+        return xs_, ys_
+    except Exception:
+        xs_ = np.linspace(0, 3650, 200)
+        ys_ = np.array([sf_obj(t) for t in xs_])
+        return xs_, ys_
+
+if plot_scope == "Single patient":
+    sel_options = list(range(n_patients))
+    if id_col:
+        sel_label = df_edit[id_col].astype(str).tolist()
+        sel = st.selectbox("Select patient", options=sel_options, format_func=lambda i: sel_label[i])
+    else:
+        sel = st.selectbox("Select patient (row index)", options=sel_options)
+
+    sf = surv_funcs[sel]
+    xs, ys = _get_xy(sf)
+
+    if _PLOTLY_OK and plot_mode.startswith("Interactive"):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", line=dict(shape="hv"), name=str(sel)))
+        fig.update_layout(
+            height=plot_height,
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis_title="Time (days)",
+            yaxis_title="Survival probability",
+            yaxis=dict(range=[0, 1.02]),
+            legend_title_text="Patient",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.step(xs, ys, where="post")
+        ax.set_xlabel("Time (days)")
+        ax.set_ylabel("Survival probability")
+        ax.set_ylim(0, 1.02)
+        ax.grid(True, alpha=0.3)
+        st.pyplot(fig, clear_figure=True)
+
+    st.subheader("Selected patient details")
+    pid = df_edit.iloc[sel][id_col] if id_col else sel
+    risk = float(risk_scores[sel])
+    risk_group, _ = classify_risk(risk, risk_ref)
+
+    detail_cols = st.columns(3)
+    detail_cols[0].metric("Patient", str(pid))
+    detail_cols[1].metric("Risk score", f"{risk:.4f}")
+    detail_cols[2].metric("Risk group", risk_group if risk_group else "—")
+
+    if all_years:
+        probs = survival_prob_at_times(sf, timepoints_days)
+        prob_df = pd.DataFrame({"Year": all_years, "Survival probability": probs})
+        st.table(prob_df)
+
 else:
-    sel = st.selectbox("Select patient (row index)", options=sel_options)
+    # All patients in one plot
+    show_legend = st.toggle("Show legend", value=False)
+    max_legend = st.slider("Legend limit (patients)", 5, 80, 20, 5)
 
-sf = surv_funcs[sel]
+    if _PLOTLY_OK and plot_mode.startswith("Interactive"):
+        fig = go.Figure()
+        for i in range(n_patients):
+            pid = df_edit.iloc[i][id_col] if id_col else i
+            xs, ys = _get_xy(surv_funcs[i])
+            fig.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=ys,
+                    mode="lines",
+                    line=dict(shape="hv"),
+                    name=str(pid),
+                    showlegend=show_legend and (i < max_legend),
+                )
+            )
+        fig.update_layout(
+            height=plot_height,
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis_title="Time (days)",
+            yaxis_title="Survival probability",
+            yaxis=dict(range=[0, 1.02]),
+            legend_title_text="Patient",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        for i in range(n_patients):
+            pid = df_edit.iloc[i][id_col] if id_col else i
+            xs, ys = _get_xy(surv_funcs[i])
+            # different colors automatically; legend optional
+            if show_legend and (i < max_legend):
+                ax.step(xs, ys, where="post", label=str(pid))
+            else:
+                ax.step(xs, ys, where="post")
+        ax.set_xlabel("Time (days)")
+        ax.set_ylabel("Survival probability")
+        ax.set_ylim(0, 1.02)
+        ax.grid(True, alpha=0.3)
+        if show_legend:
+            ax.legend(loc="best", fontsize=8)
+        st.pyplot(fig, clear_figure=True)
 
-try:
-    xs = np.asarray(sf.x, dtype=float)
-    ys = np.asarray(sf.y, dtype=float)
-except Exception:
-    xs = np.linspace(0, 3650, 200)
-    ys = np.array([sf(t) for t in xs])
-
-if _PLOTLY_OK and plot_mode.startswith("Interactive"):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", line=dict(shape="hv")))
-    fig.update_layout(
-        height=plot_height,
-        margin=dict(l=10, r=10, t=10, b=10),
-        xaxis_title="Time (days)",
-        yaxis_title="Survival probability",
-        yaxis=dict(range=[0, 1.02]),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.step(xs, ys, where="post")
-    ax.set_xlabel("Time (days)")
-    ax.set_ylabel("Survival probability")
-    ax.set_ylim(0, 1.02)
-    ax.grid(True, alpha=0.3)
-    st.pyplot(fig, clear_figure=True)
-
-st.subheader("Selected patient details")
-pid = df_edit.iloc[sel][id_col] if id_col else sel
-risk = float(risk_scores[sel])
-risk_group, _ = classify_risk(risk, risk_ref)
-
-detail_cols = st.columns(3)
-detail_cols[0].metric("Patient", str(pid))
-detail_cols[1].metric("Risk score", f"{risk:.4f}")
-detail_cols[2].metric("Risk group", risk_group if risk_group else "—")
-
-if all_years:
-    probs = survival_prob_at_times(sf, timepoints_days)
-    prob_df = pd.DataFrame({"Year": all_years, "Survival probability": probs})
-    st.table(prob_df)
