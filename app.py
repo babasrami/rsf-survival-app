@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 # ---------------------------
 st.set_page_config(
     page_title="RSF Survival Predictor",
-    page_icon="🧬",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
