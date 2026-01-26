@@ -790,7 +790,7 @@ with st.expander("📋 What you need to upload", expanded=True):
         - One row per patient
         - Matches training schema
         - Missing values as NA/blank
-        - Protein columns ending in `_pTPM`
+        - Protein expression columns (_pTPM)
         """)
 
 st.markdown("<br>", unsafe_allow_html=True)
