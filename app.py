@@ -1086,13 +1086,13 @@ else:
     # All Patients plot
     st.caption("Comparing survival curves for all patients with color-coded legend")
     
-    # Enhanced matplotlib styling for dark theme
-    plt.style.use('dark_background')
+    # Use default style for light background
+    plt.style.use('default')
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    # Set figure and axes background - dark theme
-    fig.patch.set_facecolor('#0a0a0f')
-    ax.set_facecolor('#0a0a0f')
+    # Set figure and axes background - light theme
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
 
     max_time = 3650  # Default max time
     
@@ -1126,35 +1126,35 @@ else:
         ax.step(xs, ys, where="post", color=color, linewidth=4, alpha=0.15)  # Glow
         ax.step(xs, ys, where="post", color=color, linewidth=2, label=label, alpha=0.9)
 
-    # Styling
-    ax.set_xlabel("Time (days)", fontsize=12, color='white', fontweight='500')
-    ax.set_ylabel("Survival Probability", fontsize=12, color='white', fontweight='500')
+    # Styling - black text for light background
+    ax.set_xlabel("Time (days)", fontsize=12, color='black', fontweight='500')
+    ax.set_ylabel("Survival Probability", fontsize=12, color='black', fontweight='500')
     ax.set_ylim(0, 1.05)
     ax.set_xlim(0, max_time)
 
-    # Grid styling - subtle grey
-    ax.grid(True, alpha=0.1, color='#606060', linestyle='--')
-    ax.spines['bottom'].set_color('#404040')
-    ax.spines['left'].set_color('#404040')
+    # Grid styling - subtle grey on light background
+    ax.grid(True, alpha=0.3, color='#cccccc', linestyle='--')
+    ax.spines['bottom'].set_color('black')
+    ax.spines['left'].set_color('black')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    # Tick styling - light grey
-    ax.tick_params(colors='#b0b0b0', which='both')
+    # Tick styling - black
+    ax.tick_params(colors='black', which='both')
 
-    # Legend on top right with dark glass style
+    # Legend on top right with light style
     legend = ax.legend(
         loc='upper right',
         fontsize=9,
         framealpha=0.9,
-        facecolor='#121218',
-        edgecolor='#4a1d6a',
-        labelcolor='#e0e0e0',
+        facecolor='white',
+        edgecolor='#333333',
+        labelcolor='black',
         title='Patients',
         title_fontsize=10,
         ncol=min(3, (len(X) + 9) // 10)  # Adaptive columns
     )
-    legend.get_title().set_color('white')
+    legend.get_title().set_color('black')
 
     plt.tight_layout()
     st.pyplot(fig, clear_figure=True)
